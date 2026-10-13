@@ -2,8 +2,8 @@ import type {
   ChatResponse, DocumentItem, Progress, QuizQuestion, QuizResult, Recommendation,
 } from "./types";
 
-const USE_MOCK = true; // flip to false when the backend is ready
-const BASE = import.meta.env.VITE_API_URL;
+export const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
+const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -178,7 +178,7 @@ export async function generateQuiz(topic: string): Promise<QuizQuestion[]> {
   if (USE_MOCK) {
     await sleep(800);
     // strip the answer and explanation, like a real backend would
-    return mockQuiz.map(({ answer, explanation, ...q }) => q);
+    return mockQuiz.map(({ answer: _a, explanation: _e, ...q }) => q);
   }
   return request("/quiz/generate", {
     method: "POST",
