@@ -1,5 +1,5 @@
 import type {
-  ChatResponse, DocumentItem, Progress, QuizQuestion, QuizResult,
+  ChatResponse, DocumentItem, Progress, QuizQuestion, QuizResult, Recommendation,
 } from "./types";
 
 const USE_MOCK = true; // flip to false when the backend is ready
@@ -101,18 +101,84 @@ export async function askQuestion(question: string): Promise<ChatResponse> {
   });
 }
 
+// export async function generateQuiz(topic: string): Promise<QuizQuestion[]> {
+//   if (USE_MOCK) {
+//     await sleep(800);
+//     return [
+//       {
+//         id: "q1",
+//         text: "Which is NOT a necessary condition for deadlock?",
+//         options: ["Mutual exclusion", "Hold and wait", "Preemption", "Circular wait"],
+//         concept: "Deadlock conditions",
+//         difficulty: "easy",
+//       },
+//     ];
+//   }
+//   return request("/quiz/generate", {
+//     method: "POST",
+//     headers: { "Content-Type": "application/json" },
+//     body: JSON.stringify({ topic }),
+//   });
+// }
+
+// export async function submitQuiz(answers: Record<string, string>): Promise<QuizResult> {
+//   if (USE_MOCK) {
+//     await sleep(600);
+//     return {
+//       score: 1,
+//       total: 1,
+//       feedback: [{ questionId: "q1", correct: true, explanation: "Preemption must NOT be possible for deadlock to occur." }],
+//     };
+//   }
+//   return request("/quiz/submit", {
+//     method: "POST",
+//     headers: { "Content-Type": "application/json" },
+//     body: JSON.stringify({ answers }),
+//   });
+// }
+const mockQuiz: (QuizQuestion & { answer: string; explanation: string })[] = [
+  {
+    id: "q1",
+    text: "Which is NOT a necessary condition for deadlock?",
+    options: ["Mutual exclusion", "Hold and wait", "Preemption", "Circular wait"],
+    concept: "Deadlock conditions",
+    difficulty: "easy",
+    answer: "Preemption",
+    explanation:
+      "Deadlock needs NO preemption. If resources could be taken away, the deadlock could be broken.",
+  },
+  {
+    id: "q2",
+    text: "A set of processes each waiting for a resource held by the next one describes which condition?",
+    options: ["Mutual exclusion", "Hold and wait", "No preemption", "Circular wait"],
+    concept: "Deadlock conditions",
+    difficulty: "medium",
+    answer: "Circular wait",
+    explanation:
+      "Circular wait means P0 waits on P1, P1 on P2, and so on until Pn waits on P0.",
+  },
+  {
+    id: "q3",
+    text: "Which strategy breaks the hold-and-wait condition?",
+    options: [
+      "Allow resources to be preempted",
+      "Require a process to request all resources at once",
+      "Number resources and request in order",
+      "Run processes one at a time",
+    ],
+    concept: "Deadlock prevention",
+    difficulty: "hard",
+    answer: "Require a process to request all resources at once",
+    explanation:
+      "If a process must get everything up front, it never holds some resources while waiting for others.",
+  },
+];
+
 export async function generateQuiz(topic: string): Promise<QuizQuestion[]> {
   if (USE_MOCK) {
     await sleep(800);
-    return [
-      {
-        id: "q1",
-        text: "Which is NOT a necessary condition for deadlock?",
-        options: ["Mutual exclusion", "Hold and wait", "Preemption", "Circular wait"],
-        concept: "Deadlock conditions",
-        difficulty: "easy",
-      },
-    ];
+    // strip the answer and explanation, like a real backend would
+    return mockQuiz.map(({ answer, explanation, ...q }) => q);
   }
   return request("/quiz/generate", {
     method: "POST",
@@ -120,15 +186,33 @@ export async function generateQuiz(topic: string): Promise<QuizQuestion[]> {
     body: JSON.stringify({ topic }),
   });
 }
+const mockTopics = [
+  { name: "Deadlock conditions", mastery: 40 },
+  { name: "Process scheduling", mastery: 75 },
+  { name: "Memory management", mastery: 20 },
+];
+
+function pickRecommendation(): Progress["recommendation"] {
+  const weakest = [...mockTopics].sort((a, b) => a.mastery - b.mastery)[0];
+  const action: Recommendation =
+    weakest.mastery < 40 ? "reteach" : weakest.mastery < 70 ? "practice" : "advance";
+  return { action, topic: weakest.name };
+}
 
 export async function submitQuiz(answers: Record<string, string>): Promise<QuizResult> {
   if (USE_MOCK) {
     await sleep(600);
-    return {
-      score: 1,
-      total: 1,
-      feedback: [{ questionId: "q1", correct: true, explanation: "Preemption must NOT be possible for deadlock to occur." }],
-    };
+    const feedback = mockQuiz.map((q) => ({
+      questionId: q.id,
+      correct: answers[q.id] === q.answer,
+      explanation: q.explanation,
+    }));
+    const score = feedback.filter((f) => f.correct).length;
+
+    const topic = mockTopics.find((t) => t.name === "Deadlock conditions");
+    if (topic) topic.mastery = Math.round((score / mockQuiz.length) * 100);
+
+    return { score, total: mockQuiz.length, feedback };
   }
   return request("/quiz/submit", {
     method: "POST",
@@ -141,12 +225,8 @@ export async function getProgress(): Promise<Progress> {
   if (USE_MOCK) {
     await sleep(500);
     return {
-      topics: [
-        { name: "Deadlock conditions", mastery: 40 },
-        { name: "Process scheduling", mastery: 75 },
-        { name: "Memory management", mastery: 20 },
-      ],
-      recommendation: { action: "reteach", topic: "Memory management" },
+      topics: mockTopics.map((t) => ({ ...t })),
+      recommendation: pickRecommendation(),
     };
   }
   return request("/progress");
